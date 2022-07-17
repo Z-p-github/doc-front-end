@@ -48,6 +48,10 @@ module.exports = (options, cotext) => {
                       "completeWork阶段",
                     ],
                     ["/React/React-Fiber/Fiber-dom-diff/commit", "commit阶段"],
+                    [
+                      "/React/React-Fiber/Fiber-dom-diff/domdiff",
+                      "completeWork-diff阶段",
+                    ],
                   ],
                 },
                 [

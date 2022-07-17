@@ -88,6 +88,6 @@ export function completeWork(current, workInProgress) {
 
 `collectEffectList`接受两个参数，第一个是父 fiber 节点，第二个是当前需要处理的 fiber 节点。
 
-`父fiber` 的 `firstEffect` 和 `lastEffect`保存的是一条链表，这条链表主要是有一个个的子 fiber 节点组成。
+`父fiber` 的 `firstEffect` 和 `lastEffect`保存的是一条单向链表，这条链表主要是有一个个的子 fiber 节点组成。
 
 副作用链收集完成了之后，即`completeUnitOfWork`方法里面的 `workInProgress` 为 `null` 了 就会去执行 commitRoot，也就是我们说的提交阶段
