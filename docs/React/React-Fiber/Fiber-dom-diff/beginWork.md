@@ -213,3 +213,5 @@ export function reconcileChildren(
 ::: warning 注意
 值得一提的是，`mountChildFibers`与`reconcileChildFibers`这两个方法的逻辑基本一致。唯一的区别是：`reconcileChildFibers`会为生成的`Fiber节点`带上`effectTag`属性，而`mountChildFibers`不会。
 :::
+
+每个 Fiber 节点在遍历到时，若自身存在变更，会根据 Fiber 类型对节点执行创建/更新，其中包含了执行部分生命周期，给 Fiber 节点打上 effectTag 等操作。effectTag 代表了 Fiber 节点做了怎样的变更，具有 effectTag 的 Fiber 会成为 effect。每个 Fiber 中带有自身子节点的信息，据此来判断是否需要继续向下深度遍历，这个过程被称为 beginWork。
