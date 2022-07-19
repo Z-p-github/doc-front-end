@@ -66,4 +66,151 @@ function reconcileSingleElement(returnFiber, currentFirstChild, element) {
 
 ## 新的节点是多节点
 
-2、新的节点是一个多节点，有很多个节点，但是如果
+首先他们会到这个方法中去进行一个 diff 操作
+
+```js
+/**
+ * returnFiber 父fiber节点
+ * currentFirstChild 老的第一个儿子节点
+ * newChildren 新的儿子节点
+ */
+//这个方法里面会有不同条件下的三个循环操作
+function reconcileChildrenArray(returnFiber, currentFirstChild, newChildren) {
+  //将要返回的第一个新fiber
+  let resultingFirstChild = null;
+  //上一个新fiber
+  let previousNewFiber = null;
+  //当前的老fiber
+  let oldFiber = currentFirstChild;
+  //下一个老fiber
+  let nextOldFiber = null;
+  //新的虚拟DOM的索引
+  let newIdx = 0;
+  //指的上一个可以复用的，不需要移动的节点的老索引
+  let lastPlacedIndex = 0;
+  //处理更新的情况 老fiber和新fiber都存在
+  for (; oldFiber && newIdx < newChildren.length; newIdx++) {
+    //先缓存下一个老fiber
+    nextOldFiber = oldFiber.sibling;
+    //试图复用才fiber
+    const newFiber = updateSlot(returnFiber, oldFiber, newChildren[newIdx]);
+    //如果key 不一样，直接跳出第一轮循环
+    if (!newFiber) break; //跳出第一轮循环
+    //老fiber存在，但是新的fiber并没有复用老fiber
+    if (oldFiber && !newFiber.alternate) {
+      deleteChild(returnFiber, oldFiber);
+    }
+    //核心是给当前的newFiber添加一个副作用flags 叫新增
+    lastPlacedIndex = placeChild(newFiber, lastPlacedIndex, newIdx);
+    if (!previousNewFiber) {
+      resultingFirstChild = newFiber; //resultingFirstChild=>li(A)
+    } else {
+      previousNewFiber.sibling = newFiber; //liB.sibling=li(C)
+    }
+    previousNewFiber = newFiber; //previousNewFiber=>li(C)
+    oldFiber = nextOldFiber;
+  }
+
+  if (newIdx === newChildren.length) {
+    //1!=6
+    deleteRemainingChildren(returnFiber, oldFiber);
+    return resultingFirstChild;
+  }
+  //如果没有老fiber了
+  if (!oldFiber) {
+    //oldFIber现在指向B，有的，进不出
+    //循环虚拟DOM数组， 为每个虚拟DOM创建一个新的fiber
+    for (; newIdx < newChildren.length; newIdx++) {
+      const newFiber = createChild(returnFiber, newChildren[newIdx]); //li(C)
+      lastPlacedIndex = placeChild(newFiber, lastPlacedIndex, newIdx);
+      if (!previousNewFiber) {
+        resultingFirstChild = newFiber; //resultingFirstChild=>li(A)
+      } else {
+        previousNewFiber.sibling = newFiber; //liB.sibling=li(C)
+      }
+      previousNewFiber = newFiber; //previousNewFiber=>li(C)
+    }
+    return resultingFirstChild;
+  }
+  //将剩下的老fiber放入map中
+  const existingChildren = mapRemainingChildren(returnFiber, oldFiber);
+  for (; newIdx < newChildren.length; newIdx++) {
+    //去map中找找有没key相同并且类型相同可以复用的老fiber 老真实DOM
+    const newFiber = updateFromMap(
+      existingChildren,
+      returnFiber,
+      newIdx,
+      newChildren[newIdx]
+    );
+    if (newFiber) {
+      //说明是复用的老fiber
+      if (newFiber.alternate) {
+        existingChildren.delete(newFiber.key || newIdx);
+      }
+      lastPlacedIndex = placeChild(newFiber, lastPlacedIndex, newIdx);
+      if (!previousNewFiber) {
+        resultingFirstChild = newFiber; //resultingFirstChild=>li(A)
+      } else {
+        previousNewFiber.sibling = newFiber; //liB.sibling=li(C)
+      }
+      previousNewFiber = newFiber; //previousNewFiber=>li(C)
+    }
+  }
+  //map中剩下是没有被 复用的，全部删除
+  existingChildren.forEach((child) => deleteChild(returnFiber, child));
+  return resultingFirstChild;
+}
+```
+
+第一个循环，在 `updateSlot` 方法里面会先尝试的去复用老的 fiber，如果不能服用（key 不一样），会直接跳出第一个循环，如果可以复用
+
+```js
+//如果key一样，但是却没有复用老的fiber，判断有没有复用老的fiber，就是看这个fiber节点有没有alternate，因为如果可以复用老的fiber节点，源码里面会将 老的fiber节点和新的虚拟dom的新属性曲生成一个新的workInProgress fiber，老新节点节点之间会用alternate相互指向
+//----所以下面这句话就是，如果老的fiber存在但是新生成的fiber却没有复用，那么就去删除老的fiber，给他添加一个删除的 `effectTag`
+if (oldFiber && !newFiber.alternate) {
+  deleteChild(returnFiber, oldFiber);
+}
+
+//placeChild方法中会去给新的fiber节点打上一个新增的`effectTag`,在这个里面也会去判断节点移动的情况
+function placeChild(newFiber, lastPlacedIndex, newIdx) {
+  newFiber.index = newIdx;
+  if (!shouldTrackSideEffects) {
+    return lastPlacedIndex;
+  }
+  const current = newFiber.alternate;
+  //如果有current说是更新，复用老节点的更新，不会添加Placement
+  if (current) {
+    const oldIndex = current.index;
+    //如果老fiber它对应的真实DOM挂载的索引比lastPlacedIndex小
+    if (oldIndex < lastPlacedIndex) {
+      //老fiber对应的真实DOM就需要移动了
+      newFiber.flags |= Placement;
+      return lastPlacedIndex;
+    } else {
+      //否则 不需要移动 并且把老fiber它的原来的挂载索引返回成为新的lastPlacedIndex
+      return oldIndex;
+    }
+  } else {
+    newFiber.flags = Placement;
+    return lastPlacedIndex;
+  }
+}
+```
+
+在最后一个循环中，会将老的 fiber 节点，生成一个 map，以 key 为 map 对象的 key，fiber 节点为 map 的 value，然后每次循环的时候，用新的虚拟 dom 的 key 去里面查找，看看能不能复用，如果`alternate`存在说明能够复用，不存在话就调用`placeChild`方法去处理移动或者新增
+
+<strong>每次`placeChild`的时候会给新的`fiber`节点绑定一个`index`属性，表示这个`fiber`节点在`child`的位置索引</strong>
+
+<strong>如果最后新的节点遍历完成了，但是老的 map 中还有数据，那么全部标记为删除</strong>
+
+```js
+//map中剩下是没有被 复用的，全部删除
+existingChildren.forEach((child) => deleteChild(returnFiber, child));
+```
+
+这个方法里面有一个 `resultingFirstChild`变量，主要是用来保存我们 diff 好了的 fiber 链表
+<img src='@assets/fiber-link.png' alt="fiber-link" />
+
+1、第一种情况，老的是单节点，新的是多节点
+
+2、第二种情况，老的是多节点，新的也是多节点
