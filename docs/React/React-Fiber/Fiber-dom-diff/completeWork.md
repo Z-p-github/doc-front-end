@@ -63,14 +63,25 @@ export function completeWork(current, workInProgress) {
   const newProps = workInProgress.pendingProps;
   switch (workInProgress.tag) {
     case HostComponent:
-      //创建真实的DOM节点
-      const type = workInProgress.type; //div p span
-      //创建此fiber的真实DOM
-      const instance = createInstance(type, newProps);
-      //让此Fiber的真实DOM属性指向instance
-      workInProgress.stateNode = instance;
-      //给真实DOM添加属性 包括如果独生子是字符串或数字的情况
-      finalizeInitialChildren(instance, type, newProps);
+      //在新的fiber构建完成的时候，收集更新并且标识 更新副作用
+      if (current && workInProgress.stateNode) {
+        updateHostComponent(
+          current,
+          workInProgress,
+          workInProgress.tag,
+          newProps
+        );
+      } else {
+        //创建真实的DOM节点
+        const type = workInProgress.type; //div p span
+        //创建此fiber的真实DOM
+        const instance = createInstance(type, newProps);
+        appendAllChildren(instance, workInProgress);
+        //让此Fiber的真实DOM属性指向instance
+        workInProgress.stateNode = instance;
+        //给真实DOM添加属性 包括如果独生子是字符串或数字的情况
+        finalizeInitialChildren(instance, type, newProps);
+      }
       break;
     default:
       break;
@@ -78,7 +89,13 @@ export function completeWork(current, workInProgress) {
 }
 ```
 
-在这个方法里面，主要是会去做两件事：
+### 如果老的节点可以复用
+
+第一个判断，如果可以复用，并且 `stateNode` 存在，那么就会去更新新的 fiber 节点(`workInProgress`)的 `updateQueue` 属性，里面保存更新的 prop(比如属性值改变等。。。)，根据新老节点的 prop 去做比较进行更新
+
+### 如果老的节点不能复用
+
+否责会去做两件事：
 
 第一件就是会去生成该对应 fiber 的真实 dom 节点，并且赋值给 fiber 节点的 stateNode 属性。因为在 beginwork 阶段的时候只是生成了一个 fiber 节点没有生成 dom 节点
 
@@ -86,8 +103,40 @@ export function completeWork(current, workInProgress) {
 
 ## collectEffectList 副作用链收集
 
+```js
+function collectEffectList(returnFiber, completedWork) {
+  if (returnFiber) {
+    //如果父亲 没有effectList,那就让父亲 的firstEffect链表头指向自己的头
+    if (!returnFiber.firstEffect) {
+      returnFiber.firstEffect = completedWork.firstEffect;
+    }
+    //如果自己有链表尾
+    if (completedWork.lastEffect) {
+      //并且父亲也有链表尾
+      if (returnFiber.lastEffect) {
+        //把自己身上的effectlist挂接到父亲的链表尾部
+        returnFiber.lastEffect.nextEffect = completedWork.firstEffect;
+      }
+      returnFiber.lastEffect = completedWork.lastEffect;
+    }
+    const flags = completedWork.flags;
+    //如果此完成的fiber有副使用，那么就需要添加到effectList里
+    if (flags) {
+      //如果父fiber有lastEffect的话，说明父fiber已经有effect链表
+      if (returnFiber.lastEffect) {
+        returnFiber.lastEffect.nextEffect = completedWork;
+      } else {
+        returnFiber.firstEffect = completedWork;
+      }
+
+      returnFiber.lastEffect = completedWork;
+    }
+  }
+}
+```
+
 `collectEffectList`接受两个参数，第一个是父 fiber 节点，第二个是当前需要处理的 fiber 节点。
 
 `父fiber` 的 `firstEffect` 和 `lastEffect`保存的是一条单向链表，这条链表主要是有一个个的子 fiber 节点组成。
 
-副作用链收集完成了之后，即`completeUnitOfWork`方法里面的 `workInProgress` 为 `null` 了 就会去执行 commitRoot，也就是我们说的提交阶段
+副作用链收集完成了之后，即`completeUnitOfWork`方法里面的 `workInProgress` 为 `null` 了 就会去执行 commitRoot，也就是我们说的提交阶段。

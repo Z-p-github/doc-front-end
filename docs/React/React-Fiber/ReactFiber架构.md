@@ -16,4 +16,4 @@ Fiber 在英语中翻译为`纤维`，它并不是计算机语言中的新名词
 
 ## Fiber 的数据结构
 
-...todo
+<img src='@assets/fiberNode.png' alt="fiberNode"  height="300" />

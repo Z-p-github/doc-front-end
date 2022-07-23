@@ -199,7 +199,7 @@ function placeChild(newFiber, lastPlacedIndex, newIdx) {
 
 在最后一个循环中，会将老的 fiber 节点，生成一个 map，以 key 为 map 对象的 key，fiber 节点为 map 的 value，然后每次循环的时候，用新的虚拟 dom 的 key 去里面查找，看看能不能复用，如果`alternate`存在说明能够复用，不存在话就调用`placeChild`方法去处理移动或者新增
 
-<strong>每次`placeChild`的时候会给新的`fiber`节点绑定一个`index`属性，表示这个`fiber`节点在`child`的位置索引</strong>
+<strong>每次`placeChild`的时候会给新的`fiber`节点绑定一个`index`属性，表示这个`fiber`节点在`child`的位置索引，当节点 diff 的时候，会用老 child 节点的 index 和新的循环里面 lastPlacedIndex(指的上一个可以复用的，不需要移动的节点的老索引)去进行比较，如果 fiber 节点可以服用，而且老 fiber 它对应的真实 DOM 挂载的索引比 lastPlacedIndex 小，那么老 fiber 对应的真实 DOM 就需要移动了</strong>
 
 <strong>如果最后新的节点遍历完成了，但是老的 map 中还有数据，那么全部标记为删除</strong>
 
@@ -208,9 +208,44 @@ function placeChild(newFiber, lastPlacedIndex, newIdx) {
 existingChildren.forEach((child) => deleteChild(returnFiber, child));
 ```
 
+<strong>节点在 diff 的过程中，会有一个单向链表去保存每一个 diff 完成了之后的 fiber 节点信息</strong>
 这个方法里面有一个 `resultingFirstChild`变量，主要是用来保存我们 diff 好了的 fiber 链表
 <img src='@assets/fiber-link.png' alt="fiber-link" />
 
-1、第一种情况，老的是单节点，新的是多节点
+### 1、第一种情况，老的是单节点，新的是多节点
 
-2、第二种情况，老的是多节点，新的也是多节点
+<img src='@assets/singleDiff.png' alt="singleDiff"  height="300" />
+
+- 这种情况会先走到第一个循环中去，发现第一个新的节点的 key 和老的`child`不一样，那么会跳出第一次循环，然后走到最后一次循环。
+
+- 发现 D 节点和 老 A 节点 key 不一样 ，那么会给 D 节点打上一个 `Placement`的 `flag` ，然后接着循环
+
+- 发现新的 A 节点和老的 A 节点可以复用，那么会用老的 A 的 fiber 节点和新的 A 的虚拟 dom 的 prop 属性生成一个新的 fiber 节点，并且修改这个 fiber 节点的 index 属性，按照最新的在 child 树中的位置就行赋值，并且将第一个新的 D 节点的 sibling 指向这个 A，也就是上面说的 `resultingFirstChild.sinling = A`
+
+- 循环到 C，发现 `existingChildren`这个 map 数据里面没找到 C，说明不能复用，会直接给节点打上一个 `Placement`的 `flag` ，并且最后给 `resultingFirstChild`这个链表中就行 sibling 绑定
+
+- 循环完了之后，会去给 map 中剩下的 fiber 节点打上删除的标记
+
+```js
+//map中剩下是没有被 复用的，全部删除
+existingChildren.forEach((child) => deleteChild(returnFiber, child));
+```
+
+### 2、第二种情况，老的是多节点，新的也是多节点
+
+<img src='@assets/multipleDiff.png' alt="multipleDiff"  height="300" />
+
+- 发现 A 节点和 老 A 节点 key 可以复用 ，那么会根据老的 A 的 fiber 节点和新的 A 的虚拟 dom 的 prop 生成一个新的 fiber 节点，然后接着循环
+
+- 循环到新的 C 节点的时候，会去在老的 map(existingChildren)中去找，发现有一个老的 C 节点可以复用，那么会根据老的 fiber 节点生成一个新的 fiber 节点，然后会去比较老的节点在兄弟节点中的 index，如果小于新的 index，那么这儿需要标记为移动，这儿不需要去移动，然后接着循环
+
+- 发现 E 节点没办法复用 ，那么会直接去生成一个新的 fiber 节点，然后会标记为插入新增 flag=2
+
+- 发现 B 节点和 老 B 节点 key 可以复用 ，那么会根据老的 B 的 fiber 节点和新的 B 的虚拟 dom 的 prop 生成一个新的 fiber 节点，然后比较 index 索引，发现需要移动，给新的 fiber 节点标记为移动
+
+- G 和 D 都标记为新增
+
+- 然后返回 diff 好了的 resultingFirstChild 这个单向链表
+  <img src='@assets/singleLink.png' alt="singleLink"  height="300" />
+
+这个时候就 diff 完成了，然后就会去走 complete 的流程

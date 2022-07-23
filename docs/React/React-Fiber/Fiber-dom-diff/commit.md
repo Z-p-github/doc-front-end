@@ -37,13 +37,31 @@ function commitRoot() {
 在`commitMutationEffects`方法里面，会去循环这个`effectList`链表，会根据每一个 effect 的 tag 去判断当前节点的具体操作，比如需要删除，新增，修改属性等。。。
 
 ```js
-while (nextEffect) {
-  const flags = nextEffect.flags;
-  //如果是插入
-  if (flags === Placement) {
-    commitPlacement(nextEffect);
+function commitMutationEffects(root) {
+  const finishedWork = root.finishedWork;
+  let nextEffect = finishedWork.firstEffect;
+  let effectsList = "";
+  while (nextEffect) {
+    const flags = nextEffect.flags;
+    let current = nextEffect.alternate;
+    //如果是插入
+    if (flags === Placement) {
+      commitPlacement(nextEffect);
+      //如果是插入 和更新
+    } else if (flags === PlacementAndUpdate) {
+      commitPlacement(nextEffect);
+      nextEffect.flags = Update;
+      commitWork(current, nextEffect);
+      //如果是更新
+    } else if (flags === Update) {
+      commitWork(current, nextEffect);
+      //如果是删除
+    } else if (flags === Deletion) {
+      commitDeletion(nextEffect);
+    }
+    //指向下一个effect
+    nextEffect = nextEffect.nextEffect;
   }
-  //指向下一个effect
-  nextEffect = nextEffect.nextEffect;
+  root.current = finishedWork;
 }
 ```
