@@ -54,10 +54,17 @@ module.exports = (options, cotext) => {
                     ],
                   ],
                 },
-                [
-                  "/React/React-Fiber/React中的事件优先级调度",
-                  "React事件优先级调度",
-                ],
+                {
+                  title: "Concurrent Mode",
+                  collapsable: true,
+                  children: [
+                    [
+                      "/React/Concurrent-Mode/React中的事件优先级调度",
+                      "React事件优先级调度",
+                    ],
+                    ["/React/Concurrent-Mode/scheduler", "scheduler具体实现"],
+                  ],
+                },
               ],
             },
           ],
