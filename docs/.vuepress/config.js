@@ -23,7 +23,11 @@ module.exports = (options, cotext) => {
         {
           title: "JavaScript",
           collapsable: true,
-          children: [["/JavaScript/你真的懂闭包吗", "你真的懂闭包吗"]],
+          children: [
+            ["/JavaScript/你真的懂闭包吗", "你真的懂闭包吗"],
+            ["/JavaScript/小顶堆", "小顶堆"],
+            ["/JavaScript/位运算", "位运算"],
+          ],
         },
         {
           title: "React技术研究",
@@ -63,6 +67,7 @@ module.exports = (options, cotext) => {
                       "React事件优先级调度",
                     ],
                     ["/React/Concurrent-Mode/scheduler", "scheduler具体实现"],
+                    ["/React/Concurrent-Mode/lane", "lane模型"],
                   ],
                 },
               ],
